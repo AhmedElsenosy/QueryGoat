@@ -14,6 +14,15 @@ class Settings(BaseSettings):
 
     app_name: str = "QueryGoat"
     database_url: str
+    jwt_secret: str
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 14
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = "http://127.0.0.1:8000/auth/google/callback"
+    email_address: str = ""
+    email_password: str = ""
 
 
 settings = Settings()

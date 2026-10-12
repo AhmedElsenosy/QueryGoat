@@ -17,6 +17,20 @@ class Base(DeclarativeBase):
     pass
 
 
+def init_db() -> None:
+    from app import models as _models  # noqa: F401
+
+    Base.metadata.create_all(bind=engine)
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub VARCHAR(255)"))
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_sub ON users (google_sub)"
+            )
+        )
+
+
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
