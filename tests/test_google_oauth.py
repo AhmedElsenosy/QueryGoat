@@ -10,7 +10,13 @@ client = TestClient(app)
 
 
 def test_google_login_requires_config() -> None:
-    response = client.get("/auth/google/login", follow_redirects=False)
+    from app.config import settings as app_settings
+
+    with (
+        patch.object(app_settings, "google_client_id", ""),
+        patch.object(app_settings, "google_client_secret", ""),
+    ):
+        response = client.get("/auth/google/login", follow_redirects=False)
     assert response.status_code == 503
 
 

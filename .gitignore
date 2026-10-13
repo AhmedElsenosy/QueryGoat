@@ -1,4 +1,17 @@
+# Secrets
 .env
+.env.*
+!.env.example
+
+# Python
 __pycache__/
+*.py[cod]
 .pytest_cache/
-*.pyc
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Puzzle SQLite copies (ingest recreates these from ../../../../spider/)
+data/sqlite/
+*.sqlite
