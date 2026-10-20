@@ -197,3 +197,36 @@ class DailyPuzzle(Base):
 
     question: Mapped[Question] = relationship(back_populates="daily_puzzles")
     agent_run: Mapped[AgentRun] = relationship(back_populates="daily_puzzles")
+
+
+class Submission(Base):
+    __tablename__ = "submissions"
+    __table_args__ = (
+        Index(
+            "uq_submissions_first_solve",
+            "user_id",
+            "question_id",
+            unique=True,
+            postgresql_where=text("is_correct"),
+        ),
+        Index("ix_submissions_user_attempted", "user_id", "created_at"),
+        Index("ix_submissions_question", "question_id", "user_id", "is_correct"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    question_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("questions.id", ondelete="CASCADE"), index=True
+    )
+    puzzle_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    sql: Mapped[str] = mapped_column(Text)
+    is_correct: Mapped[bool] = mapped_column(Boolean, default=False)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duration_ms: Mapped[float] = mapped_column(default=0.0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

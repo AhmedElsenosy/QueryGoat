@@ -33,6 +33,12 @@ class UnsafeSQLError(ValueError):
     pass
 
 
+class CheatSQLError(ValueError):
+    """Raised when SQL returns constants instead of reading the database."""
+
+    pass
+
+
 class SQLExecutionError(RuntimeError):
     pass
 
@@ -80,6 +86,31 @@ def has_order_by(sql: str) -> bool:
     except UnsafeSQLError:
         return False
     return tree.find(exp.Order) is not None
+
+
+def assert_uses_data(sql: str) -> None:
+    """Reject constant-only queries that never read the database.
+
+    A cheat like ``SELECT 0.99`` can reproduce a 1x1 gold result without
+    solving anything.  A submission must reference at least one base table
+    and project at least one data-derived expression (a column reference,
+    ``*``, or an aggregate) in its outermost SELECT.
+    """
+    statements = parse_statements(sql)
+    tree = statements[0]
+    if not any(node for node in tree.find_all(exp.Table)):
+        raise CheatSQLError(
+            "Query must read data from the database tables."
+        )
+    outer_select = tree.find(exp.Select)
+    projection = outer_select.expressions if outer_select else []
+    if projection and not any(
+        node.find(exp.Column) or node.find(exp.Star) or node.find(exp.AggFunc)
+        for node in projection
+    ):
+        raise CheatSQLError(
+            "Query must project database data, not hard-coded constants."
+        )
 
 
 def _canon(value: object) -> str:

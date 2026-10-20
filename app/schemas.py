@@ -86,3 +86,20 @@ class DailyRunResponse(BaseModel):
     attempts: int
     daily_puzzle_id: uuid.UUID | None = None
     error: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Submission / grading
+# ---------------------------------------------------------------------------
+
+class SubmitTodayRequest(BaseModel):
+    sql: str = Field(min_length=1, max_length=10_000)
+
+
+class SubmitTodayResponse(BaseModel):
+    is_correct: bool
+    status: str  # "correct" | "wrong" | "sql_error" | "timeout" | "too_many_rows"
+    message: str
+    attempts: int
+    solved: bool
+    puzzle_date: str
