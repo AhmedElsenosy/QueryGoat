@@ -28,3 +28,6 @@ class DailyState(TypedDict, total=False):
     rewrite_attempt: int
     max_rewrite_attempts: int
     schema_context: dict | None
+    # Notification fields
+    notify_status: str | None
+    notified_count: int | None

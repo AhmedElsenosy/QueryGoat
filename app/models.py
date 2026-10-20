@@ -194,6 +194,9 @@ class DailyPuzzle(Base):
     published_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    notified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     question: Mapped[Question] = relationship(back_populates="daily_puzzles")
     agent_run: Mapped[AgentRun] = relationship(back_populates="daily_puzzles")

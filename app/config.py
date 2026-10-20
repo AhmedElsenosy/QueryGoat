@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     google_redirect_uri: str = "http://127.0.0.1:8000/auth/google/callback"
     email_address: str = ""
     email_password: str = ""
+    app_frontend_url: str = "http://localhost:3000"
     sqlite_data_dir: Path = SRC_DIR / "data" / "sqlite"
     daily_job_secret: str = ""
     gemini_api_key: str = ""

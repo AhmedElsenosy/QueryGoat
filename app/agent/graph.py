@@ -6,6 +6,7 @@ from .nodes import (
     already_published,
     execute_gold,
     fail_run,
+    notify_users,
     publish,
     retry,
     rewrite_prompt,
@@ -18,7 +19,9 @@ from .state import DailyState
 
 def _after_published(state: DailyState) -> str:
     if state.get("status") == "already_published":
-        return "end"
+        # Route through notify_users so a skipped/stalled notification is
+        # retried; the node is a no-op once notified_at is stamped.
+        return "notify_users"
     return "select_candidate"
 
 
@@ -64,13 +67,14 @@ def build_daily_graph():
     graph.add_node("verify_rewrite", verify_rewrite)
     graph.add_node("retry", retry)
     graph.add_node("publish", publish)
+    graph.add_node("notify_users", notify_users)
     graph.add_node("fail_run", fail_run)
 
     graph.add_edge(START, "already_published")
     graph.add_conditional_edges(
         "already_published",
         _after_published,
-        {"end": END, "select_candidate": "select_candidate"},
+        {"end": END, "select_candidate": "select_candidate", "notify_users": "notify_users"},
     )
     graph.add_conditional_edges(
         "select_candidate",
@@ -98,7 +102,8 @@ def build_daily_graph():
         _after_retry,
         {"fail_run": "fail_run", "select_candidate": "select_candidate"},
     )
-    graph.add_edge("publish", END)
+    graph.add_edge("publish", "notify_users")
+    graph.add_edge("notify_users", END)
     graph.add_edge("fail_run", END)
     return graph.compile()
 

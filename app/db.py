@@ -31,6 +31,11 @@ def init_db() -> None:
         )
         conn.execute(text("ALTER TABLE questions ADD COLUMN IF NOT EXISTS rewritten_prompt TEXT"))
         conn.execute(text("ALTER TABLE questions ADD COLUMN IF NOT EXISTS result_col_count INTEGER DEFAULT 1"))
+        conn.execute(
+            text(
+                "ALTER TABLE daily_puzzles ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ"
+            )
+        )
 
 
 def get_db() -> Generator[Session, None, None]:

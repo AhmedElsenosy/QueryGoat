@@ -441,3 +441,68 @@ def fail_run(state: DailyState) -> DailyState:
         error=state.get("error") or "Daily picker failed.",
     )
     return {"status": "failed"}
+
+
+# ── notify_users ──────────────────────────────────────────────────────
+
+def notify_users(state: DailyState) -> DailyState:
+    """Email active users that today's puzzle is live (exactly once).
+
+    Idempotent by ``daily_puzzles.notified_at``: a rerun after ``publish``
+    or on ``already_published`` only re-sends when the stamp is missing
+    (e.g. a previous send crashed mid-way).
+    """
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select
+
+    from app.emailer import email_configured, puzzle_announcement_email, send_puzzle_announcement
+    from app.models import DailyPuzzle, User
+
+    puzzle_date = _today(state)
+    session = SessionLocal()
+    try:
+        puzzle = session.execute(
+            select(DailyPuzzle).where(DailyPuzzle.puzzle_date == puzzle_date)
+        ).scalar_one_or_none()
+        if puzzle is None:
+            return {"notify_status": "no_puzzle"}
+        if puzzle.notified_at is not None:
+            return {"notify_status": "already_notified"}
+
+        question = puzzle.question
+        subject, body = puzzle_announcement_email(
+            puzzle_date=puzzle_date.isoformat(),
+            prompt=question.rewritten_prompt or question.prompt,
+            difficulty=question.difficulty,
+            database=question.database.display_name,
+            columns=question.result_col_count or 1,
+            rows=question.result_row_count,
+        )
+
+        if not email_configured():
+            log.warning("Skipping puzzle email: SMTP credentials not configured.")
+            return {"notify_status": "unconfigured"}
+
+        recipients = [
+            email
+            for (email,) in session.execute(
+                select(User.email).where(User.is_active.is_(True))
+            ).all()
+        ]
+        result = send_puzzle_announcement(recipients, subject, body)
+        log.info(
+            "Puzzle announcement: sent=%s refused=%s", result["sent"], result["failed"]
+        )
+
+        # Stamp only when the notification really happened (or SMTP is not
+        # even configured, so future runs don't keep retrying a dead send).
+        if result["sent"] or not result.get("configured", False):
+            puzzle.notified_at = datetime.now(timezone.utc)
+            session.commit()
+            status = "sent" if result["sent"] else "unconfigured"
+        else:
+            status = "failed"
+        return {"notify_status": status, "notified_count": result["sent"]}
+    finally:
+        session.close()

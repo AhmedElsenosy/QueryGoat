@@ -45,6 +45,8 @@ def main() -> None:
             "puzzle_date": result.get("puzzle_date"),
             "attempts": result.get("attempt"),
             "daily_puzzle_id": result.get("daily_puzzle_id"),
+            "notify_status": result.get("notify_status"),
+            "notified_count": result.get("notified_count"),
             "error": result.get("error"),
         },
     )
