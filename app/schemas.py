@@ -98,8 +98,12 @@ class SubmitTodayRequest(BaseModel):
 
 class SubmitTodayResponse(BaseModel):
     is_correct: bool
-    status: str  # "correct" | "wrong" | "sql_error" | "timeout" | "too_many_rows"
+    status: str  # "correct" | "wrong" | "sql_error" | "timeout" | "too_many_rows" | "cheat"
     message: str
     attempts: int
     solved: bool
     puzzle_date: str
+    points: int = 0
+    current_streak: int = 0
+    total_points: int = 0
+    badge: str | None = None

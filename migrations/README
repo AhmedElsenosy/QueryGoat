@@ -1,0 +1,22 @@
+# QueryGoat Alembic migrations
+
+- URL comes from `.env` (`DATABASE_URL`) — single source of truth (`migrations/env.py`).
+- Generate a revision after model changes:
+
+```bash
+alembic revision --autogenerate -m "describe change"
+alembic upgrade head
+```
+
+- Existing databases that predate Alembic are marked current with
+  `alembic stamp head` (no destructive SQL runs).
+- `app.db.init_db()`'s `create_all` + idempotent ALTERs stay as the dev/test
+  bootstrap; production deploys should run `alembic upgrade head` instead.
+
+## Known cosmetic `alembic check` noise
+
+`users.google_sub` is stored as a *unique index* (`unique=True`), and this
+alembic version reflects it back as a unique *constraint*, so
+`alembic check` reports a remove-index/add-constraint pair. The database
+remains unique-protected; treat that specific pair as noise in future
+autogenerate reviews.

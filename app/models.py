@@ -34,7 +34,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(254), unique=True, index=True)
     email_canonical: Mapped[str] = mapped_column(String(254), index=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    google_sub: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    google_sub: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -42,6 +42,12 @@ class User(Base):
 
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
+    )
+    submissions: Mapped[list["Submission"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    stats: Mapped["UserStats"] = relationship(
+        back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
 
 
@@ -233,3 +239,28 @@ class Submission(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+    user: Mapped[User] = relationship(back_populates="submissions")
+
+
+class UserStats(Base):
+    __tablename__ = "user_stats"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    total_points: Mapped[int] = mapped_column(Integer, default=0)
+    easy_solved: Mapped[int] = mapped_column(Integer, default=0)
+    medium_solved: Mapped[int] = mapped_column(Integer, default=0)
+    hard_solved: Mapped[int] = mapped_column(Integer, default=0)
+    extra_solved: Mapped[int] = mapped_column(Integer, default=0)
+    current_streak: Mapped[int] = mapped_column(Integer, default=0)
+    longest_streak: Mapped[int] = mapped_column(Integer, default=0)
+    last_daily_solved_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    user: Mapped[User] = relationship(back_populates="stats")

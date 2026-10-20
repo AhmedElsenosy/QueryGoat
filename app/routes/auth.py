@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import User
+from app.rate_limit import limiter
 from app.schemas import (
     LoginRequest,
     RefreshRequest,
@@ -19,7 +21,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=UserPublic, status_code=status.HTTP_201_CREATED)
-def register(body: RegisterRequest, db: Session = Depends(get_db)) -> User:
+@limiter.limit(lambda: settings.rate_limit_register)
+def register(
+    request: Request,
+    body: RegisterRequest,
+    db: Session = Depends(get_db),
+) -> User:
     try:
         return auth_service.register_user(db, body.username, body.gmail, body.password)
     except ValueError as exc:
@@ -30,7 +37,12 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)) -> User:
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+@limiter.limit(lambda: settings.rate_limit_login)
+def login(
+    request: Request,
+    body: LoginRequest,
+    db: Session = Depends(get_db),
+) -> TokenResponse:
     user = auth_service.authenticate_user(db, body.username, body.password)
     if user is None:
         raise HTTPException(
@@ -41,7 +53,12 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh(body: RefreshRequest, db: Session = Depends(get_db)) -> TokenResponse:
+@limiter.limit(lambda: settings.rate_limit_refresh)
+def refresh(
+    request: Request,
+    body: RefreshRequest,
+    db: Session = Depends(get_db),
+) -> TokenResponse:
     try:
         return auth_service.rotate_refresh_token(db, body.refresh_token)
     except ValueError as exc:

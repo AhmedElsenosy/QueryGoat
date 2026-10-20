@@ -1,6 +1,7 @@
 import pytest
 
 from app import emailer as _emailer
+from app.rate_limit import limiter as _limiter
 
 _REAL_SEND = _emailer.send_puzzle_announcement
 _FAKE_CALLS: list[dict] = []
@@ -18,6 +19,14 @@ def _no_real_emails(monkeypatch):
         return {"sent": len(list(recipients)), "failed": [], "configured": True}
 
     monkeypatch.setattr(_emailer, "send_puzzle_announcement", _fake)
+
+
+@pytest.fixture(autouse=True)
+def _no_rate_limits():
+    """Rate limiting off unless a dedicated test opts in."""
+    _limiter.enabled = False
+    yield
+    _limiter.enabled = True
 
 
 @pytest.fixture()

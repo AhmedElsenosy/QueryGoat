@@ -1,15 +1,16 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
-from app.config import SRC_DIR
+from app.config import SRC_DIR, settings
 from app.db import get_db
 from app.deps import get_current_user
-from app.models import DailyPuzzle, Question, Submission, User
+from app.models import DailyPuzzle, Question, Submission, User, UserStats
+from app.rate_limit import limiter, submit_key
 from app.schema_inspector import build_schema_context
 from app.schemas import (
     ColumnInfo,
@@ -20,7 +21,9 @@ from app.schemas import (
     SubmitTodayResponse,
     TableInfo,
 )
+from app.services import stats as stats_service
 from app.services.grader import grade_submission
+from app.services.stats import DIFFICULTY_POINTS
 
 router = APIRouter(prefix="/puzzles", tags=["puzzles"])
 
@@ -83,7 +86,9 @@ def today(db: Session = Depends(get_db)) -> DailyPuzzlePublic:
 
 
 @router.post("/today/submit", response_model=SubmitTodayResponse)
+@limiter.limit(lambda: settings.rate_limit_submit, key_func=submit_key)
 def submit_today(
+    request: Request,
     body: SubmitTodayRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -117,6 +122,8 @@ def submit_today(
     ).scalar_one_or_none() is not None
 
     error_message = grade.error_message if grade.status != "wrong" else None
+    points_awarded = 0
+    first_solve_before = already_solved
     if grade.is_correct and not already_solved:
         db.add(
             Submission(
@@ -129,6 +136,12 @@ def submit_today(
             )
         )
         try:
+            award_stats = stats_service.award_first_solve(
+                db, current_user.id, question.difficulty, puzzle.puzzle_date
+            )
+            points_awarded = DIFFICULTY_POINTS.get(question.difficulty, 0)
+            # Submission insert + stats award share one transaction: a lost
+            # race over the partial unique index rolls the award back too.
             db.commit()
         except IntegrityError:
             db.rollback()
@@ -158,21 +171,44 @@ def submit_today(
         )
     ).scalar_one()
 
-    messages = {
-        "correct": "Correct! You solved today's puzzle."
-        if not already_solved
-        else "Correct — already solved. Checking new attempt.",
-        "wrong": "Wrong — your query ran, but the result doesn't match.",
-        "too_many_rows": grade.error_message or "Query returned too many rows.",
-        "timeout": "Query timed out.",
-        "sql_error": grade.error_message or "Invalid SQL.",
-        "cheat": grade.error_message or "Nice try — queries must read the tables.",
-    }
+    stats_row = db.execute(
+        select(UserStats).where(UserStats.user_id == current_user.id)
+    ).scalar_one_or_none()
+    total_points = stats_row.total_points if stats_row else 0
+    current_streak = stats_service.effective_current_streak(
+        stats_row, puzzle.puzzle_date
+    )
+    badge = stats_service.badge_for_points(total_points)
+
+    if grade.is_correct and not first_solve_before and points_awarded:
+        suffix = f" +{points_awarded} point{'s' if points_awarded != 1 else ''}"
+        if current_streak > 1:
+            suffix += f" — {current_streak} day streak!"
+        message = f"Correct! You solved today's puzzle.{suffix}"
+    else:
+        message_map = {
+            "correct": (
+                "Correct! You solved today's puzzle."
+                if not already_solved
+                else "Correct — already solved. Checking new attempt."
+            ),
+            "wrong": "Wrong — your query ran, but the result doesn't match.",
+            "too_many_rows": grade.error_message or "Query returned too many rows.",
+            "timeout": "Query timed out.",
+            "sql_error": grade.error_message or "Invalid SQL.",
+            "cheat": grade.error_message or "Nice try — queries must read the tables.",
+        }
+        message = message_map.get(grade.status, message_map["sql_error"])
+
     return SubmitTodayResponse(
         is_correct=grade.is_correct,
         status=grade.status,
-        message=messages.get(grade.status, messages["sql_error"]),
+        message=message,
         attempts=int(attempts),
         solved=already_solved or grade.is_correct,
         puzzle_date=puzzle.puzzle_date.isoformat(),
+        points=points_awarded,
+        current_streak=current_streak,
+        total_points=total_points,
+        badge=badge,
     )

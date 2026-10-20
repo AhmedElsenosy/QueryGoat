@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     daily_job_secret: str = ""
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash"
+    # Rate limits
+    rate_limit_login: str = "5/minute"
+    rate_limit_register: str = "5/minute"
+    rate_limit_refresh: str = "10/minute"
+    rate_limit_submit: str = "15/minute"
 
 
 settings = Settings()

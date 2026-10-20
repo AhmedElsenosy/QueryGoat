@@ -36,6 +36,13 @@ def init_db() -> None:
                 "ALTER TABLE daily_puzzles ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ"
             )
         )
+        conn.execute(
+            text(
+                "ALTER TABLE questions ALTER COLUMN result_col_count "
+                "SET DEFAULT 1, "
+                "ALTER COLUMN result_col_count SET NOT NULL"
+            )
+        )
 
 
 def get_db() -> Generator[Session, None, None]:
