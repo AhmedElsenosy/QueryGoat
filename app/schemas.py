@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -39,3 +40,49 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int
+
+
+# ---------------------------------------------------------------------------
+# Puzzle schema / context models (LeetCode-style puzzle card)
+# ---------------------------------------------------------------------------
+
+class ColumnInfo(BaseModel):
+    name: str
+    type: str
+    pk: bool = False
+
+
+class ForeignKeyInfo(BaseModel):
+    from_column: str
+    to_table: str
+    to_column: str
+
+
+class TableInfo(BaseModel):
+    name: str
+    columns: list[ColumnInfo]
+    foreign_keys: list[ForeignKeyInfo]
+    sample_columns: list[str]
+    sample_rows: list[list[Any]]
+
+
+class OutputShape(BaseModel):
+    columns: int
+    rows: int
+
+
+class DailyPuzzlePublic(BaseModel):
+    puzzle_date: str
+    prompt: str
+    difficulty: str
+    database: str
+    schema_info: list[TableInfo]
+    output_shape: OutputShape
+
+
+class DailyRunResponse(BaseModel):
+    status: str
+    puzzle_date: str
+    attempts: int
+    daily_puzzle_id: uuid.UUID | None = None
+    error: str | None = None

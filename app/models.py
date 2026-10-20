@@ -15,7 +15,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -127,6 +127,8 @@ class Question(Base):
     result_hash: Mapped[str] = mapped_column(String(64))
     result_row_count: Mapped[int] = mapped_column(Integer)
     result_ordered: Mapped[bool] = mapped_column(Boolean, default=False)
+    rewritten_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    result_col_count: Mapped[int] = mapped_column(Integer, default=1)
     source: Mapped[str] = mapped_column(String(32), default="spider")
     spider_split: Mapped[str | None] = mapped_column(String(16), nullable=True)
     used_as_daily_on: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -135,3 +137,63 @@ class Question(Base):
     )
 
     database: Mapped[PuzzleDatabase] = relationship(back_populates="questions")
+    daily_puzzles: Mapped[list["DailyPuzzle"]] = relationship(back_populates="question")
+
+
+class AgentRun(Base):
+    __tablename__ = "agent_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('running', 'published', 'already_published', 'failed')",
+            name="ck_agent_runs_status",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    puzzle_date: Mapped[date] = mapped_column(Date, index=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(32), default="running")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    selected_question_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("questions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    reject_reasons: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    daily_puzzles: Mapped[list["DailyPuzzle"]] = relationship(back_populates="agent_run")
+
+
+class DailyPuzzle(Base):
+    __tablename__ = "daily_puzzles"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    puzzle_date: Mapped[date] = mapped_column(Date, unique=True, index=True)
+    question_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("questions.id", ondelete="RESTRICT"),
+        index=True,
+    )
+    agent_run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_runs.id", ondelete="RESTRICT"),
+        index=True,
+    )
+    published_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    question: Mapped[Question] = relationship(back_populates="daily_puzzles")
+    agent_run: Mapped[AgentRun] = relationship(back_populates="daily_puzzles")

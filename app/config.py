@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     email_address: str = ""
     email_password: str = ""
     sqlite_data_dir: Path = SRC_DIR / "data" / "sqlite"
+    daily_job_secret: str = ""
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.0-flash"
 
 
 settings = Settings()

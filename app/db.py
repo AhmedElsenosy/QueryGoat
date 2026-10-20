@@ -29,6 +29,8 @@ def init_db() -> None:
                 "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_sub ON users (google_sub)"
             )
         )
+        conn.execute(text("ALTER TABLE questions ADD COLUMN IF NOT EXISTS rewritten_prompt TEXT"))
+        conn.execute(text("ALTER TABLE questions ADD COLUMN IF NOT EXISTS result_col_count INTEGER DEFAULT 1"))
 
 
 def get_db() -> Generator[Session, None, None]:

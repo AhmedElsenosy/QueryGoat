@@ -156,6 +156,7 @@ def ingest_spider(*, daily_only: bool = True) -> dict[str, int]:
                         result.columns, result.rows, ordered=ordered
                     ),
                     result_row_count=len(result.rows),
+                    result_col_count=len(result.columns),
                     result_ordered=ordered,
                     source="spider",
                     spider_split=example["split"],

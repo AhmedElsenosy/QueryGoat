@@ -14,4 +14,5 @@ slowapi
 langgraph
 langchain-core
 langchain-google-genai
+google-genai
 pytest

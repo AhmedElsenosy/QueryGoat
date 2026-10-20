@@ -94,13 +94,42 @@ def _canon(value: object) -> str:
     return str(value)
 
 
-def fingerprint(columns: list[str], rows: list[tuple], *, ordered: bool) -> str:
-    norm_cols = [str(col).strip().lower() for col in columns]
+def fingerprint(
+    columns: list[str],
+    rows: list[tuple],
+    *,
+    ordered: bool,
+    include_columns: bool = True,
+) -> str:
+    """Hash a result set.
+
+    Grading must use ``include_columns=False``: SQLite labels computed
+    columns by their raw expression text (``AVG(T2.UnitPrice)`` vs
+    ``AVG(UnitPrice)``), so a correct query would otherwise hash differently.
+    """
     norm_rows = [tuple(_canon(v) for v in row) for row in rows]
     if not ordered:
         norm_rows = sorted(norm_rows)
-    payload = json.dumps({"c": norm_cols, "r": norm_rows}, separators=(",", ":"))
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    if include_columns:
+        payload = {
+            "c": [str(col).strip().lower() for col in columns],
+            "r": norm_rows,
+        }
+    else:
+        payload = {"r": norm_rows}
+    return hashlib.sha256(
+        json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def value_fingerprint(
+    columns: list[str],
+    rows: list[tuple],
+    *,
+    ordered: bool,
+) -> str:
+    """Fingerprint of the result *values* only (ignores column labels)."""
+    return fingerprint(columns, rows, ordered=ordered, include_columns=False)
 
 
 def execute_readonly(

@@ -9,6 +9,7 @@ from app.sandbox import (
     UnsafeSQLError,
     execute_readonly,
     fingerprint,
+    value_fingerprint,
 )
 
 
@@ -56,6 +57,41 @@ def test_fingerprint_ignores_order_unless_asked() -> None:
     b = [("a",), ("b",)]
     assert fingerprint(cols, a, ordered=False) == fingerprint(cols, b, ordered=False)
     assert fingerprint(cols, a, ordered=True) != fingerprint(cols, b, ordered=True)
+
+
+def test_fingerprint_still_includes_columns_by_default() -> None:
+    assert fingerprint(["a"], [("x",)], ordered=False) != fingerprint(
+        ["b"], [("x",)], ordered=False
+    )
+
+
+def test_value_fingerprint_ignores_column_labels(tmp_path: Path) -> None:
+    path = _make_db(tmp_path)
+    gold = execute_readonly(path, "SELECT name FROM artists WHERE name = 'A'")
+    variants = [
+        "SELECT T1.name AS artist_name FROM artists T1 WHERE T1.name = 'A'",
+        "SELECT a.name AS label FROM artists a WHERE a.name = 'A'",
+    ]
+    gold_hash = value_fingerprint(gold.columns, gold.rows, ordered=True)
+    for sql in variants:
+        result = execute_readonly(path, sql)
+        assert result.columns != gold.columns
+        assert value_fingerprint(
+            result.columns, result.rows, ordered=True
+        ) == gold_hash, f"variant marked wrong: {sql}"
+
+
+def test_value_fingerprint_matches_for_aggregate_aliases(tmp_path: Path) -> None:
+    path = _make_db(tmp_path)
+    gold = execute_readonly(path, "SELECT COUNT(*) FROM artists")
+    user = execute_readonly(path, "SELECT COUNT(id) AS total FROM artists")
+    assert gold.rows == user.rows
+    assert value_fingerprint(
+        gold.columns, gold.rows, ordered=False
+    ) == value_fingerprint(user.columns, user.rows, ordered=False)
+    assert fingerprint(gold.columns, gold.rows, ordered=False) != fingerprint(
+        user.columns, user.rows, ordered=False
+    )
 
 
 def test_difficulty_and_star_filters() -> None:
