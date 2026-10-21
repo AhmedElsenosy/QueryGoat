@@ -1,3 +1,5 @@
+from urllib.parse import urlencode
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -78,34 +80,36 @@ def google_login() -> RedirectResponse:
     return RedirectResponse(google_oauth.google_authorization_url())
 
 
-@router.get("/google/callback", response_model=TokenResponse)
+@router.get("/google/callback")
 def google_callback(
     db: Session = Depends(get_db),
     code: str | None = Query(default=None),
     state: str | None = Query(default=None),
     error: str | None = Query(default=None),
-) -> TokenResponse:
-    if error:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Google OAuth error: {error}",
-        )
-    if not code or not state:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Missing Google OAuth code or state",
-        )
-    google_oauth.verify_oauth_state(state)
-    profile = google_oauth.exchange_code_for_google_user(code)
+) -> RedirectResponse:
+    # Hand the tokens back to the frontend through the URL fragment:
+    # fragments are client-only (never sent to servers / logs).
+    frontend = settings.app_frontend_url.rstrip("/")
+    fail_url = f"{frontend}/auth/google/callback#"
+
     try:
+        if error:
+            raise ValueError(f"Google OAuth error: {error}")
+        if not code or not state:
+            raise ValueError("Missing Google OAuth code or state")
+        google_oauth.verify_oauth_state(state)
+        profile = google_oauth.exchange_code_for_google_user(code)
         user = auth_service.login_or_register_google(
             db,
             google_sub=profile["sub"],
             email=profile["email"],
         )
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
-    return auth_service.issue_tokens(db, user)
+    except (ValueError, HTTPException) as exc:
+        message = exc if isinstance(exc, ValueError) else str(exc.detail)
+        return RedirectResponse(f"{fail_url}{urlencode({'oauth_error': message})}")
+
+    tokens = auth_service.issue_tokens(db, user)
+    return RedirectResponse(
+        f"{frontend}/auth/google/callback"
+        f"#access_token={tokens.access_token}&refresh_token={tokens.refresh_token}"
+    )
